@@ -1,0 +1,21 @@
+---
+- name:     fetch developers' keys
+  action:   fetch-all-developers
+  register: developers
+  environment:
+    LEIN_ROOT:            true
+    GITHUB_TOKEN:         "{{ lookup('env','GITHUB_TOKEN') }}"
+    GITHUB_CLIENT_ID:     "{{ lookup('env','GITHUB_CLIENT_ID') }}"
+    GITHUB_CLIENT_SECRET: "{{ lookup('env','GITHUB_CLIENT_SECRET') }}"
+
+- name:       clear current authorized keys
+  debug:      msg="> ~{{ item }}/.ssh/authorized_keys"
+  with_items: hostvars[inventory_hostname].users
+
+- name: add ssh developers keys
+  authorized_key:
+    user: "{{ item[0] }}"
+    key:  "{{ item[1] }}"
+  with_nested:
+    - "{{ hostvars[inventory_hostname].users }}"
+    - "{{ developers.content }}"

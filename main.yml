@@ -1,0 +1,8 @@
+---
+- hosts:        all
+  gather_facts: no
+  sudo:         yes
+  roles:
+    - clojure-leiningen
+  tasks:
+    - include: tasks/update_developers_keys.yml
