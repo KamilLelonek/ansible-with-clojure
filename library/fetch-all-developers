@@ -1,79 +1,60 @@
 #!/usr/bin/env lein exec
 ; WANT_JSON
 
-(leiningen.exec/deps '[[clj-http-lite "0.2.1"]
+(leiningen.exec/deps '[[http-kit "2.2.0"]
                        [org.clojure/data.json "0.2.6"]
                        [slingshot "0.12.2"]])
 
 (ns main.github
   (:require
-    [clj-http.lite.client :as client]
-    [clojure.data.json    :as json]))
+    [clojure.data.json  :as json]
+    [org.httpkit.client :as http]))
 
-(def token         (System/getenv "GITHUB_TOKEN"))
-(def client-id     (System/getenv "GITHUB_CLIENT_ID"))
-(def client-secret (System/getenv "GITHUB_CLIENT_SECRET"))
+(def organization-name        "clojure")
+(def organization-members-url (str "https://api.github.com/orgs/"organization-name"/members"))
+(def github_token             (System/getenv "CLOJURE_GITHUB_TOKEN"))
+(def authorization-headers    {:headers {"Authorization" (str "token "github_token)}})
 
-(def organization-name                   "clojure")
-(def organization-members-url            (str "https://api.github.com/orgs/"organization-name"/members"))
-(def organization-members-authorized-url (str organization-members-url"?client_id="client-id"&client_secret="client-secret))
-(def authorization-headers               {:headers {"Authorization" (str "token "token)}})
+(defn get-url [url]
+  (http/get url authorization-headers))
 
-(defn- organization-members-response []
-  (client/get organization-members-authorized-url authorization-headers))
-
-(defn- organization-members-response-body []
-  (:body (organization-members-response)))
-
-(defn organization-members []
-  (json/read-str (organization-members-response-body) :key-fn keyword))
+(defn get-json [future]
+  (-> future
+    (deref)
+    (get :body)
+    (json/read-str :key-fn keyword)))
 
 (defn user-ssh-keys-url [login]
   (str "https://api.github.com/users/"login"/keys"))
 
-(ns main.developers.single-developer
-  (:require
-    [clj-http.lite.client :as client]
-    [clojure.data.json    :as json]))
-
-(defn- public-keys-response-body [developer-ssh-keys-url]
-  (:body (client/get developer-ssh-keys-url)))
-
-(defn- id-and-public-keys [developer-ssh-keys-url]
-  (let [json-result (public-keys-response-body developer-ssh-keys-url)]
-    (json/read-str json-result :key-fn keyword)))
-
-(defn public-keys [user-ssh-keys-url]
-  (map :key (id-and-public-keys user-ssh-keys-url)))
-
-(ns main.developers
-  (:require [main.github :as github]
-            [main.developers.single-developer :as single-developer]))
-
-(defn- logins []
-  (map :login (github/organization-members)))
-
-(defn- public-keys-urls []
-  (map github/user-ssh-keys-url (logins)))
-
 (defn public-keys []
-  (mapcat single-developer/public-keys (public-keys-urls)))
+  (->> organization-members-url
+    (get-url)
+    (get-json)
+    (map :login)
+    (map user-ssh-keys-url)
+    (map get-url)
+    (map get-json)
+    (flatten)
+    (map :key)))
 
 (ns main.core
   (:require
-    [main.developers     :as developers]
+    [main.github         :as github]
     [clojure.data.json   :as json]
     [slingshot.slingshot :as slingshot]))
 
-(defn- handle-failure [body]
-  (let [failed-message (json/read-str body)
-        failed-json    {:failed true :msg failed-message}]
-    (print failed-json)))
+(defn- format-output [content]
+  (json/write-str {:content content}))
 
-(defn- all-developers-public-keys []
-    (json/write-str {:content (developers/public-keys)}))
+(defn- handle-failure [body]
+  (->> body
+    (json/read-str)
+    (assoc {:failed true} :msg)
+    (json/write-str)
+    (print)))
 
 (slingshot/try+
-  (print (all-developers-public-keys))
+  (print (format-output (github/public-keys)))
   (catch [:status 401] {:keys [body]} (handle-failure body))
   (catch [:status 403] {:keys [body]} (handle-failure body)))
