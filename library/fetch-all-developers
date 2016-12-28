@@ -10,39 +10,38 @@
     [org.httpkit.client :as http]))
 
 (def organization-name        "company")
-(def organization-members-url (str "https://api.github.com/orgs/"organization-name"/members"))
+(def organization-members-url (str "https://api.github.com/orgs/" organization-name "/members"))
 (def github-token             (System/getenv "COMPANY_GITHUB_TOKEN"))
-(def authorization-headers    {:headers {"Authorization" (str "token "github-token)}})
+(def authorization-headers    {:headers {"Authorization" (str "token " github-token)}})
 
 (defn get-url [url]
   (http/get url authorization-headers))
 
 (defn get-json [future]
   (-> future
-    (deref)
-    (get :body)
-    (json/read-str :key-fn keyword)))
+  (deref)
+  (get :body)
+  (json/read-str :key-fn keyword)))
 
 (defn user-ssh-keys-url [login]
-  (str "https://api.github.com/users/"login"/keys"))
+  (str "https://api.github.com/users/" login "/keys"))
 
 (defn public-keys []
   (->> organization-members-url
-    (get-url)
-    (get-json)
-    (map :login)
-    (map user-ssh-keys-url)
-    (map get-url)
-    (map get-json)
-    (flatten)
-    (map :key)
-    (filter identity)))
+  (get-url)
+  (get-json)
+  (map :login)
+  (map user-ssh-keys-url)
+  (map get-url)
+  (map get-json)
+  (flatten)
+  (map :key)
+  (filter identity)))
 
 (ns main.core
   (:require
-    [main.github         :as github]
-    [clojure.data.json   :as json]
-    [slingshot.slingshot :as slingshot]))
+    [main.github       :as github]
+    [clojure.data.json :as json]))
 
 (defn- format-output [content]
   (json/write-str {:content content}))
