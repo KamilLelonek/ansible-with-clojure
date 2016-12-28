@@ -2,18 +2,17 @@
 ; WANT_JSON
 
 (leiningen.exec/deps '[[http-kit "2.2.0"]
-                       [org.clojure/data.json "0.2.6"]
-                       [slingshot "0.12.2"]])
+                       [org.clojure/data.json "0.2.6"]])
 
 (ns main.github
   (:require
     [clojure.data.json  :as json]
     [org.httpkit.client :as http]))
 
-(def organization-name        "clojure")
+(def organization-name        "company")
 (def organization-members-url (str "https://api.github.com/orgs/"organization-name"/members"))
-(def github_token             (System/getenv "CLOJURE_GITHUB_TOKEN"))
-(def authorization-headers    {:headers {"Authorization" (str "token "github_token)}})
+(def github-token             (System/getenv "COMPANY_GITHUB_TOKEN"))
+(def authorization-headers    {:headers {"Authorization" (str "token "github-token)}})
 
 (defn get-url [url]
   (http/get url authorization-headers))
@@ -36,7 +35,8 @@
     (map get-url)
     (map get-json)
     (flatten)
-    (map :key)))
+    (map :key)
+    (filter identity)))
 
 (ns main.core
   (:require
@@ -47,14 +47,4 @@
 (defn- format-output [content]
   (json/write-str {:content content}))
 
-(defn- handle-failure [body]
-  (->> body
-    (json/read-str)
-    (assoc {:failed true} :msg)
-    (json/write-str)
-    (print)))
-
-(slingshot/try+
-  (print (format-output (github/public-keys)))
-  (catch [:status 401] {:keys [body]} (handle-failure body))
-  (catch [:status 403] {:keys [body]} (handle-failure body)))
+(print (format-output (github/public-keys)))
